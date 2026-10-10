@@ -116,6 +116,7 @@ export default function ChatScreen() {
 
   const cached = sessionId ? getSession(sessionId) : undefined;
   const sessionForAI: Session = {
+    id: sessionId,
     category: cached?.category ?? category,
     sourceTitle: cached?.source_title ?? sourceTitle,
     content: cached?.reading_content ?? '',

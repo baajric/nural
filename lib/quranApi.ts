@@ -1,9 +1,11 @@
+import { ARABIC_MARKER } from '../supabase/functions/reflection/prompts';
+
+/** Paragraphs starting with this marker are Arabic and rendered right-to-left in the reader. */
+export { ARABIC_MARKER };
+
 const BASE_URL = 'https://api.alquran.cloud/v1';
 /** Target length of the English translation; the Arabic is shown alongside each verse. */
 const TARGET_WORDS = 600;
-
-/** Paragraphs starting with this marker are Arabic and rendered right-to-left in the reader. */
-export const ARABIC_MARKER = '[[ar]]';
 
 interface QuranAyah {
   number: number;
