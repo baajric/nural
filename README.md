@@ -7,8 +7,8 @@ A daily reading and reflection app. Each day Nural prepares five short readings 
 Built with Expo (React Native), Supabase and Google Gemini.
 
 <p>
-  <img src="docs/screenshots/welcome.jpg" width="200" alt="Welcome screen" />
-  <img src="docs/screenshots/interests.jpg" width="200" alt="Choosing interests during onboarding" />
+  <img src="docs/screenshots/demo.gif" width="200" alt="Walkthrough: welcome, choosing interests, today, reading and the insight card" />
+  <img src="docs/screenshots/today.jpg" width="200" alt="Today screen with the week strip and the next reading" />
   <img src="docs/screenshots/reading.jpg" width="200" alt="Reading screen with Arabic and translation" />
   <img src="docs/screenshots/insight.jpg" width="200" alt="Insight card at the end of a reflection" />
 </p>
