@@ -1,5 +1,7 @@
 # Nural
 
+[![CI](https://github.com/baajric/nural/actions/workflows/ci.yml/badge.svg)](https://github.com/baajric/nural/actions/workflows/ci.yml)
+
 A daily reading and reflection app. Each day Nural prepares five short readings matched to your interests, and after each one an AI companion asks what you took from it and helps you connect it to your own goals.
 
 Built with Expo (React Native), Supabase and Google Gemini.
@@ -25,10 +27,12 @@ Built with Expo (React Native), Supabase and Google Gemini.
 | Area | Choice |
 | --- | --- |
 | App | Expo SDK 57, React Native, TypeScript, Expo Router (file-based routing) |
-| Data | Supabase (Postgres) for profiles, sessions, chat messages and streaks |
-| AI | Google Gemini for the reflection conversation, with an automatic fallback model when the first is rate-limited |
+| Data | Supabase (Postgres) for profiles, sessions, chat messages and streaks, protected by row-level security |
+| Auth | Supabase anonymous sign-in: no login screen, but every device has its own user |
+| AI | Google Gemini, called from a Supabase Edge Function so the API key stays on the server; falls back to a second model when the first is rate-limited |
 | Content | Project Gutenberg, [alquran.cloud](https://alquran.cloud/api), [bible-api.com](https://bible-api.com) |
 | UI | Custom design system with light and dark themes, Reanimated, Newsreader / Inter / Amiri fonts |
+| Quality | TypeScript (strict), ESLint, Jest unit tests, GitHub Actions |
 
 ## Getting started
 
@@ -40,9 +44,17 @@ You need Node.js 20 or newer, a free [Supabase](https://supabase.com) project an
    npm install
    ```
 
-2. Create the database tables: open the SQL editor of your Supabase project and run [`supabase/schema.sql`](supabase/schema.sql).
+2. Set up Supabase
+   - Enable anonymous sign-ins: Authentication → Sign In / Providers → Allow anonymous sign-ins.
+   - Create the tables and security policies: run [`supabase/schema.sql`](supabase/schema.sql) in the SQL editor.
+   - Deploy the reflection function and give it your Gemini key:
 
-3. Copy `.env.example` to `.env.local` and fill in your Supabase URL, Supabase anon key and Gemini API key.
+     ```bash
+     npx supabase functions deploy reflection
+     npx supabase secrets set GEMINI_API_KEY=your-key
+     ```
+
+3. Copy `.env.example` to `.env.local` and fill in your Supabase URL and anon key.
 
 4. Start the app and scan the QR code with [Expo Go](https://expo.dev/go)
 
@@ -52,19 +64,20 @@ You need Node.js 20 or newer, a free [Supabase](https://supabase.com) project an
 
    If your phone is not on the same Wi-Fi as your computer, use `npx expo start --tunnel`. To try it in a browser, press `w`.
 
-Useful checks:
+Checks:
 
 ```bash
-npx tsc --noEmit   # type check
-npm run lint       # lint
+npm run typecheck
+npm run lint
+npm test
 ```
 
 ## How it works
 
-1. **Onboarding** saves a profile to Supabase and caches it on the device, so the app opens instantly afterwards.
+1. **Onboarding** signs the device in anonymously, saves a profile owned by that user and caches it on the device, so the app opens instantly afterwards.
 2. **Today** asks Supabase for today's sessions. If there are none yet, `lib/contentGenerator.ts` builds five: it picks a category for each slot, picks a book per category without repeating a title, fetches the texts in parallel and cuts a passage that starts and ends on a sentence.
 3. **Reading** shows the passage and measures the time actually spent on it.
-4. **Reflection** (`lib/aiChat.ts`) opens with a question about the text, has Gemini judge the answer generously, then continues with two personal questions and returns a structured summary.
+4. **Reflection** runs in the `reflection` Edge Function. It loads the reading and the profile as the signed-in user, so row-level security decides what can be reflected on, then opens with a question about the text, has Gemini judge the answer generously, continues with two personal questions and returns a structured summary. The prompts and parsing live in one dependency-free module, [`supabase/functions/reflection/prompts.ts`](supabase/functions/reflection/prompts.ts), which is unit tested.
 5. **Completing** a session updates the streak and totals (`lib/progress.ts`), which the Today and Journey screens read back.
 
 ## Project structure
@@ -74,9 +87,11 @@ npm run lint       # lint
 - `constants/` — `theme.ts` (colors, fonts, spacing), `options.ts` (paths, learning areas, questions)
 - `contexts/` — profile state and theme / reading preferences
 - `hooks/` — `useTodaySessions`, `useStreak`, `useCompletedCounts`
-- `lib/` — content (`contentGenerator`, `bookReader`, `quranApi`, `bibleApi`), AI (`aiChat`, `gemini`), `progress`, `supabase`
+- `lib/` — content (`contentGenerator`, `dailyPlan`, `bookReader`, `passage`, `quranApi`, `bibleApi`), reflection client (`aiChat`), `auth`, `progress`, `streak`, `supabase`
 - `assets/illustrations/` — one illustration per reading category
-- `supabase/schema.sql` — database tables
+- `supabase/schema.sql` — tables and row-level security policies
+- `supabase/functions/reflection/` — the Edge Function and the reflection logic it shares with the app
+- `__tests__/` — unit tests for streaks, passage cutting, the daily plan, dates and the reflection logic
 
 ### Adding a learning area or spiritual path
 
@@ -90,6 +105,9 @@ Nural works out of the box with Project Gutenberg. To add your own texts, put `.
 
 ## Planned
 
-- Authentication with Supabase Auth
-- Row-level security policies
-- Gemini calls through a server-side function
+- Email sign-in, to keep progress across devices
+- Daily reminders
+
+## License
+
+[MIT](LICENSE)
