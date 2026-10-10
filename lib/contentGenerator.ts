@@ -1,6 +1,7 @@
 import { getDailyBibleReading } from './bibleApi';
 import { getPassageForCategory, pickBook } from './bookReader';
 import type { Book } from './bookReader';
+import { buildCategoryList, SCRIPTURE_CATEGORIES } from './dailyPlan';
 import { getDailyQuranReading } from './quranApi';
 import type { Profile } from './types';
 
@@ -12,35 +13,7 @@ export interface DailySession {
   content: string;
 }
 
-export const SESSIONS_PER_DAY = 5;
-
-/** Reading category for each spiritual path chosen in onboarding ('none' has no spiritual session). */
-const SPIRITUAL_CATEGORY: Record<string, string> = {
-  islam: 'Islam',
-  christianity: 'Christianity',
-  buddhism: 'Buddhism',
-  stoicism: 'Stoicism',
-  meditation: 'Mindfulness',
-};
-
-function buildCategoryList(profile: Profile): string[] {
-  const areas =
-    Array.isArray(profile.learning_areas) && profile.learning_areas.length > 0
-      ? profile.learning_areas
-      : ['General Knowledge'];
-
-  const categories: string[] = [];
-  const spiritual = profile.spiritual_preference ? SPIRITUAL_CATEGORY[profile.spiritual_preference] : undefined;
-  if (spiritual) categories.push(spiritual);
-
-  // Fill the remaining slots with the user's areas; the last slot is always General Knowledge.
-  const learningSlots = SESSIONS_PER_DAY - categories.length;
-  for (let i = 0; i < learningSlots; i++) {
-    const isLast = i === learningSlots - 1;
-    categories.push(isLast ? 'General Knowledge' : areas[i % areas.length]);
-  }
-  return categories;
-}
+export { SESSIONS_PER_DAY } from './dailyPlan';
 
 /** Scripture APIs occasionally fail; try twice before giving up. */
 async function withRetry<T>(load: () => Promise<T | null>, name: string): Promise<T> {
@@ -69,7 +42,7 @@ export async function generateDailyContent(profile: Profile): Promise<DailySessi
   // Choose the books up front so one day doesn't repeat a title, then load everything in parallel.
   const usedTitles = new Set<string>();
   const plan = buildCategoryList(profile).map((category) => {
-    if (category === 'Islam' || category === 'Christianity') return { category, book: null };
+    if (SCRIPTURE_CATEGORIES.includes(category)) return { category, book: null };
     const book = pickBook(category, usedTitles);
     usedTitles.add(book.title);
     return { category, book };

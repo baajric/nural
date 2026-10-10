@@ -1,7 +1,9 @@
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
 
+import { chooseBook } from './dailyPlan';
 import { LOCAL_BOOKS } from './localLibrary';
+import { cleanGutenbergText, extractPassage } from './passage';
 
 /** A book a passage can be drawn from: a Project Gutenberg text or a file from the optional local library. */
 export type Book = { title: string } & ({ gutenbergId: number } | { asset: number });
@@ -67,67 +69,6 @@ export function booksForCategory(category: string): Book[] {
   return all.length > 0 ? all : GUTENBERG_LIBRARY['General Knowledge'];
 }
 
-/** ~2000 words ≈ 10 minutes of reading. */
-const CHUNK_SIZE = 2000;
-/** How far we may move start/end to land on a sentence boundary. */
-const SENTENCE_SEARCH_WINDOW = 80;
-/** Start a new paragraph after roughly this many words, at the next sentence end. */
-const PARAGRAPH_WORDS = 110;
-
-const SENTENCE_END = /[.!?]["'”’)\]]*$/;
-
-function pickRandom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-function splitIntoWords(text: string): string[] {
-  return text.trim().split(/\s+/).filter(Boolean);
-}
-
-/**
- * Takes ~CHUNK_SIZE words from a random spot in the middle of the book
- * (skipping front and back matter), starting and ending on full sentences,
- * and re-flows it into readable paragraphs.
- */
-function extractChunkFromWords(words: string[]): string {
-  const total = words.length;
-  let start = 0;
-  let end = total;
-
-  if (total > CHUNK_SIZE) {
-    const startPercent = 10 + Math.random() * 70;
-    start = Math.floor((total * startPercent) / 100);
-    end = Math.min(total, start + CHUNK_SIZE);
-
-    // Move start forward to just after the previous sentence ended.
-    for (let i = start; i < Math.min(total, start + SENTENCE_SEARCH_WINDOW); i++) {
-      if (i > 0 && SENTENCE_END.test(words[i - 1])) {
-        start = i;
-        break;
-      }
-    }
-    // Extend end to the next sentence end.
-    for (let i = end - 1; i < Math.min(total, end + SENTENCE_SEARCH_WINDOW); i++) {
-      if (SENTENCE_END.test(words[i])) {
-        end = i + 1;
-        break;
-      }
-    }
-  }
-
-  const paragraphs: string[] = [];
-  let current: string[] = [];
-  for (const word of words.slice(start, end)) {
-    current.push(word);
-    if (current.length >= PARAGRAPH_WORDS && SENTENCE_END.test(word)) {
-      paragraphs.push(current.join(' '));
-      current = [];
-    }
-  }
-  if (current.length > 0) paragraphs.push(current.join(' '));
-  return paragraphs.join('\n\n');
-}
-
 async function readLocalBook(assetModule: number): Promise<string> {
   const asset = Asset.fromModule(assetModule);
   await asset.downloadAsync();
@@ -142,26 +83,18 @@ async function fetchGutenbergBook(bookId: number): Promise<string> {
   const url = `https://www.gutenberg.org/cache/epub/${bookId}/pg${bookId}.txt`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Gutenberg fetch failed: ${res.status}`);
-  let text = await res.text();
-  // Remove Gutenberg's header/footer boilerplate
-  const si = text.indexOf('*** START OF');
-  const ei = text.indexOf('*** END OF');
-  if (si >= 0 && ei > si) text = text.slice(text.indexOf('\n', si) + 1, ei);
-  // Plain-text markup: _italics_ and [Illustration: ...] placeholders
-  return text.replace(/\[Illustration[^\]]*\]/g, ' ').replace(/_/g, '');
+  return cleanGutenbergText(await res.text());
 }
 
 /** A random ~10 minute passage from the book. */
 export async function readPassage(book: Book): Promise<string> {
   const text = 'asset' in book ? await readLocalBook(book.asset) : await fetchGutenbergBook(book.gutenbergId);
-  return extractChunkFromWords(splitIntoWords(text));
+  return extractPassage(text);
 }
 
 /** Picks a book for the category, avoiding titles already used today when there is another option. */
 export function pickBook(category: string, usedTitles: ReadonlySet<string> = new Set()): Book {
-  const books = booksForCategory(category);
-  const unused = books.filter((book) => !usedTitles.has(book.title));
-  return pickRandom(unused.length > 0 ? unused : books);
+  return chooseBook(booksForCategory(category), usedTitles);
 }
 
 /**

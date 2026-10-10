@@ -1,4 +1,5 @@
 import { addDays, localDateString } from './date';
+import { applyCompletedSession } from './streak';
 import { supabase } from './supabase';
 
 /** Used when the actual reading time is unknown. */
@@ -33,23 +34,27 @@ export async function completeSession(
     .maybeSingle();
   if (streakError) throw streakError;
 
-  const last = streak?.last_active_date ?? null;
-  let current = streak?.current_streak ?? 0;
-  if (last === today) {
-    // already active today, streak unchanged
-  } else if (last === yesterday) {
-    current += 1;
-  } else {
-    current = 1;
-  }
-
+  const state = applyCompletedSession(
+    streak
+      ? {
+          currentStreak: streak.current_streak ?? 0,
+          longestStreak: streak.longest_streak ?? 0,
+          lastActiveDate: streak.last_active_date ?? null,
+          totalSessions: streak.total_sessions ?? 0,
+          totalReadingMinutes: streak.total_reading_minutes ?? 0,
+        }
+      : null,
+    today,
+    yesterday,
+    minutesRead
+  );
   const next = {
     profile_id: profileId,
-    current_streak: current,
-    longest_streak: Math.max(streak?.longest_streak ?? 0, current),
-    last_active_date: today,
-    total_sessions: (streak?.total_sessions ?? 0) + 1,
-    total_reading_minutes: (streak?.total_reading_minutes ?? 0) + Math.max(1, Math.round(minutesRead)),
+    current_streak: state.currentStreak,
+    longest_streak: state.longestStreak,
+    last_active_date: state.lastActiveDate,
+    total_sessions: state.totalSessions,
+    total_reading_minutes: state.totalReadingMinutes,
   };
 
   const { error: saveError } = streak

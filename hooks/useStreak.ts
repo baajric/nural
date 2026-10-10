@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 
 import { useOnboarding } from '@/contexts/onboarding-context';
 import { addDays, localDateString } from '@/lib/date';
+import { visibleStreak } from '@/lib/streak';
 import { supabase } from '@/lib/supabase';
 
 export interface StreakData {
@@ -50,15 +51,20 @@ export function useStreak() {
         if (error || !row) {
           setData(EMPTY);
         } else {
-          // A streak only counts if the user was active today or yesterday.
-          const today = localDateString();
-          const yesterday = localDateString(addDays(new Date(), -1));
-          const alive = row.last_active_date === today || row.last_active_date === yesterday;
-          setData({
-            currentStreak: alive ? Number(row.current_streak) || 0 : 0,
+          const state = {
+            currentStreak: Number(row.current_streak) || 0,
             longestStreak: Number(row.longest_streak) || 0,
+            lastActiveDate: row.last_active_date ?? null,
             totalSessions: Number(row.total_sessions) || 0,
             totalReadingMinutes: Number(row.total_reading_minutes) || 0,
+          };
+          const today = localDateString();
+          const yesterday = localDateString(addDays(new Date(), -1));
+          setData({
+            currentStreak: visibleStreak(state, today, yesterday),
+            longestStreak: state.longestStreak,
+            totalSessions: state.totalSessions,
+            totalReadingMinutes: state.totalReadingMinutes,
           });
         }
         setLoading(false);
