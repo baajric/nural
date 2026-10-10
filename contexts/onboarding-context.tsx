@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
+import { ensureSignedIn, signOut } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/lib/types';
 
@@ -103,6 +104,10 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
         return;
       }
 
+      // Restore the session before any screen queries data: row-level security depends on it.
+      // This is local and instant unless the device has never signed in.
+      await ensureSignedIn();
+
       // Show the cached profile immediately so the app works offline / instantly.
       const cached = await AsyncStorage.getItem(PROFILE_CACHE_KEY);
       if (cached) {
@@ -182,6 +187,9 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       name: payload?.name?.trim() || dataRef.current.name.trim() || 'Guest',
     };
 
+    // The new profile is owned by this device's user (profiles.user_id defaults to auth.uid()).
+    await ensureSignedIn();
+
     const { data: profileRow, error: profileError } = await supabase
       .from('profiles')
       .insert({
@@ -241,6 +249,8 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
 
   const resetOnboarding = useCallback(async () => {
     await AsyncStorage.multiRemove([PROFILE_ID_KEY, PROFILE_CACHE_KEY, ...LEGACY_KEYS]);
+    // Starting over means a new anonymous user, so the old profile is left behind.
+    await signOut();
     setData(defaultData);
     setProfileId(null);
     setIsOnboardingComplete(false);
